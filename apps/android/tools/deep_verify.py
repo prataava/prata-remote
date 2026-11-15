@@ -484,7 +484,6 @@ def main() -> int:
         "getSystemServiceName", "getLocalClassName", "getTitle", "setTitle",
         "registerForActivityResult", "startForeground", "stopForeground",
         "startService", "stopService", "bindService", "unbindService",
-        "dispatchKeyEvent",  # AccessibilityService: kirim KeyEvent ke jendela fokus
         "startActivity", "sendBroadcast", "registerReceiver", "unregisterReceiver",
         "finish", "finishAffinity", "recreate", "moveTaskToBack", "isFinishing",
         "isDestroyed", "onBackPressed", "onSearchRequested", "runOnUiThread",

@@ -20,7 +20,6 @@ import android.graphics.Path
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
@@ -149,8 +148,14 @@ class PrataAccessibilityService : AccessibilityService() {
 
     /**
      * Tekan Enter pada node input yang sedang fokus.
-     * CATATAN: AccessibilityNodeInfo.ACTION_IME_ENTER TIDAK ADA di SDK
-     * (compileSdk 35) — Enter dikirim sebagai key event lewat service.
+     * BATAS PLATFORM (jujur, terverifikasi terhadap android.jar platform 34
+     * + docs resmi): API publik AccessibilityService TIDAK punya cara
+     * menyuntikkan key event — AccessibilityNodeInfo.ACTION_IME_ENTER tidak
+     * ada di SDK, dan AccessibilityService.dispatchKeyEvent juga tidak ada
+     * (hanya onKeyEvent untuk MENERIMA tombol). Jadi fungsi ini selalu
+     * mengembalikan false: tombol ENTER remote dilaporkan gagal, bukan
+     * pura-pura berhasil. Tanda tangan dipertahankan agar protokol
+     * Controller -> Agent tidak berubah.
      */
     fun pressEnterOnFocusedNode(): Boolean {
         val root = rootInActiveWindow
@@ -164,17 +169,12 @@ class PrataAccessibilityService : AccessibilityService() {
                 Log.w(TAG, "Enter ditolak: tidak ada node input yang sedang fokus.")
                 return false
             }
-            try {
-                val down = dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
-                val up = dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
-                Log.i(TAG, "ENTER key event -> down=$down up=$up.")
-                return down || up
-            } finally {
-                node.recycle()
-            }
+            node.recycle()
         } finally {
             root.recycle()
         }
+        Log.w(TAG, "Enter tidak didukung: API publik AccessibilityService tidak bisa menyuntikkan key event.")
+        return false
     }
 
     /**

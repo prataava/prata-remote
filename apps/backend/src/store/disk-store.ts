@@ -64,7 +64,7 @@ export interface DiskState {
   counters: { user: number; device: number; pairing: number; session: number; log: number };
 }
 
-function emptyState(): DiskState {
+export function emptyState(): DiskState {
   return {
     version: 1,
     users: [],
@@ -111,8 +111,55 @@ function desc<T extends { createdAt: Date }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }
 
+/** Kontrak backend state yang dipakai semua adapter store. DiskBackend
+ * (tulis sinkron ke berkas lokal) dan WorkerBackend (tulis asinkron
+ * lewat Storage Worker yang tidak tercemar sandbox) sama-sama
+ * memenuhinya — adapter tidak peduli backend mana yang dipakai. */
+export interface StateBackend {
+  state: DiskState;
+  lastPersistError: Error | null;
+  persist(): Promise<void>;
+  close(): Promise<void>;
+  /** Menunggu semua tulis yang sedang berjalan selesai (no-op bila
+   * persist sinkron seperti DiskBackend). */
+  flush(): Promise<void>;
+  stats(): Record<string, number>;
+}
+
+/** Parse JSON state + hidupkan kembali tanggal (dipakai DiskBackend dan
+ * WorkerBackend agar perilakunya identik). */
+export function parseDiskState(raw: string): DiskState {
+  const parsed = JSON.parse(raw) as Partial<DiskState>;
+  const next = emptyState();
+  for (const key of Object.keys(next) as (keyof DiskState)[]) {
+    if (key === "counters") {
+      if (parsed.counters) next.counters = { ...next.counters, ...parsed.counters };
+    } else if (Array.isArray((parsed as Record<string, unknown>)[key])) {
+      (next as unknown as Record<string, unknown[]>)[key] = (parsed as Record<string, unknown[]>)[key];
+    }
+  }
+  reviveDates(next);
+  return next;
+}
+
+/** Statistik isi store (untuk /healthz & tes). */
+export function stateStats(state: DiskState): Record<string, number> {
+  return {
+    users: state.users.length,
+    devices: state.devices.length,
+    deviceKeys: state.deviceKeys.length,
+    pairings: state.pairings.length,
+    sessions: state.sessions.length,
+    permissions: state.permissions.length,
+    transfers: state.transfers.length,
+    activityLogs: state.activityLogs.length,
+    automationRules: state.automationRules.length,
+    notifications: state.notifications.length,
+  };
+}
+
 /** Backend bersama: muat state dari disk, tulis atomik tiap mutasi. */
-export class DiskBackend {
+export class DiskBackend implements StateBackend {
   readonly filePath: string;
   state: DiskState;
   lastPersistError: Error | null = null;
@@ -126,33 +173,25 @@ export class DiskBackend {
   private load(): void {
     if (!existsSync(this.filePath)) {
       mkdirSync(join(this.filePath, ".."), { recursive: true });
-      this.persist();
+      void this.persist();
       return;
     }
     try {
       const raw = readFileSync(this.filePath, "utf8");
-      const parsed = JSON.parse(raw) as Partial<DiskState>;
-      const next = emptyState();
-      for (const key of Object.keys(next) as (keyof DiskState)[]) {
-        if (key === "counters") {
-          if (parsed.counters) next.counters = { ...next.counters, ...parsed.counters };
-        } else if (Array.isArray((parsed as Record<string, unknown>)[key])) {
-          (next as unknown as Record<string, unknown[]>)[key] = (parsed as Record<string, unknown[]>)[key];
-        }
-      }
-      reviveDates(next);
-      this.state = next;
+      this.state = parseDiskState(raw);
     } catch (err) {
       const backup = `${this.filePath}.corrupt-${Date.now()}`;
       try { renameSync(this.filePath, backup); } catch { /* abaikan */ }
       console.error(`DiskStore: file rusak, dipindah ke ${backup}, mulai dari state kosong.`, err);
       this.state = emptyState();
-      this.persist();
+      void this.persist();
     }
   }
 
-  /** Tulis atomik seluruh state ke disk (sinkron — dipanggil tiap mutasi). */
-  persist(): void {
+  /** Tulis atomik seluruh state ke disk (dipanggil tiap mutasi).
+   * Asinkron agar WorkerBackend bisa memakai kontrak yang sama; isi
+   * Disk tetap tulis sinkron seperti sebelumnya. */
+  async persist(): Promise<void> {
     try {
       const tmp = `${this.filePath}.tmp-${process.pid}`;
       writeFileSync(tmp, JSON.stringify(this.state));
@@ -164,33 +203,26 @@ export class DiskBackend {
     }
   }
 
-  close(): void {
-    this.persist();
+  async close(): Promise<void> {
+    await this.persist();
+  }
+
+  async flush(): Promise<void> {
+    // Persist Disk sinkron: tidak ada tulis yang tertunda.
   }
 
   /** Statistik isi store (untuk /healthz & tes). */
   stats(): Record<string, number> {
-    return {
-      users: this.state.users.length,
-      devices: this.state.devices.length,
-      deviceKeys: this.state.deviceKeys.length,
-      pairings: this.state.pairings.length,
-      sessions: this.state.sessions.length,
-      permissions: this.state.permissions.length,
-      transfers: this.state.transfers.length,
-      activityLogs: this.state.activityLogs.length,
-      automationRules: this.state.automationRules.length,
-      notifications: this.state.notifications.length,
-    };
+    return stateStats(this.state);
   }
 }
 
 // --- Adapter store (satu backend, sepuluh kontrak) ---
 
 export class DiskUserStore implements UserStore {
-  private readonly db: DiskBackend;
+  private readonly db: StateBackend;
 
-  constructor(db: DiskBackend) {
+  constructor(db: StateBackend) {
     this.db = db;
   }
 
@@ -214,15 +246,15 @@ export class DiskUserStore implements UserStore {
       createdAt: new Date(),
     };
     this.db.state.users.push(rec);
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 }
 
 export class DiskDeviceStore implements DeviceStore {
-  private readonly db: DiskBackend;
+  private readonly db: StateBackend;
 
-  constructor(db: DiskBackend) {
+  constructor(db: StateBackend) {
     this.db = db;
   }
 
@@ -241,7 +273,7 @@ export class DiskDeviceStore implements DeviceStore {
       createdAt: new Date(),
     };
     this.db.state.devices.push(rec);
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -257,7 +289,7 @@ export class DiskDeviceStore implements DeviceStore {
     const rec = this.db.state.devices.find((d) => d.id === id);
     if (rec) {
       rec.lastSeenAt = at;
-      this.db.persist();
+      await this.db.persist();
     }
   }
 
@@ -267,7 +299,7 @@ export class DiskDeviceStore implements DeviceStore {
     if (patch.name !== undefined) rec.name = patch.name;
     if (patch.group !== undefined) rec.group = patch.group;
     if (patch.agentTokenHash !== undefined) rec.agentTokenHash = patch.agentTokenHash ?? "";
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -275,15 +307,15 @@ export class DiskDeviceStore implements DeviceStore {
     const idx = this.db.state.devices.findIndex((d) => d.id === id);
     if (idx < 0) return false;
     this.db.state.devices.splice(idx, 1);
-    this.db.persist();
+    await this.db.persist();
     return true;
   }
 }
 
 export class DiskDeviceKeyStore implements DeviceKeyStore {
-  private readonly db: DiskBackend;
+  private readonly db: StateBackend;
 
-  constructor(db: DiskBackend) {
+  constructor(db: StateBackend) {
     this.db = db;
   }
 
@@ -299,7 +331,7 @@ export class DiskDeviceKeyStore implements DeviceKeyStore {
       createdAt: new Date(),
     };
     this.db.state.deviceKeys.push(rec);
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -316,7 +348,7 @@ export class DiskDeviceKeyStore implements DeviceKeyStore {
     if (!rec) return null;
     rec.revoked = true;
     rec.revokedAt = new Date();
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -329,7 +361,7 @@ export class DiskDeviceKeyStore implements DeviceKeyStore {
         n++;
       }
     }
-    if (n > 0) this.db.persist();
+    if (n > 0) await this.db.persist();
     return n;
   }
 
@@ -337,15 +369,15 @@ export class DiskDeviceKeyStore implements DeviceKeyStore {
     const rec = this.db.state.deviceKeys.find((r) => r.id === id);
     if (rec) {
       rec.lastUsedAt = at;
-      this.db.persist();
+      await this.db.persist();
     }
   }
 }
 
 export class DiskPairingStore implements PairingStore {
-  private readonly db: DiskBackend;
+  private readonly db: StateBackend;
 
-  constructor(db: DiskBackend) {
+  constructor(db: StateBackend) {
     this.db = db;
   }
 
@@ -370,7 +402,7 @@ export class DiskPairingStore implements PairingStore {
       createdAt: now,
     };
     this.db.state.pairings.push(rec);
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -382,7 +414,7 @@ export class DiskPairingStore implements PairingStore {
     const rec = this.db.state.pairings.find((p) => p.id === id);
     if (!rec) return null;
     rec.attempts += 1;
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -394,7 +426,7 @@ export class DiskPairingStore implements PairingStore {
     rec.createdById = input.createdById;
     rec.issuedToken = input.issuedToken;
     rec.consumedAt = new Date();
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -402,7 +434,7 @@ export class DiskPairingStore implements PairingStore {
     const rec = this.db.state.pairings.find((p) => p.id === id);
     if (!rec) return null;
     rec.status = "expired";
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -410,7 +442,7 @@ export class DiskPairingStore implements PairingStore {
     const rec = this.db.state.pairings.find((p) => p.id === id);
     if (!rec) return null;
     rec.status = "revoked";
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -419,15 +451,15 @@ export class DiskPairingStore implements PairingStore {
     if (!rec || rec.issuedToken === null) return null;
     const token = rec.issuedToken;
     rec.issuedToken = null;
-    this.db.persist();
+    await this.db.persist();
     return token;
   }
 }
 
 export class DiskSessionStore implements SessionStore {
-  private readonly db: DiskBackend;
+  private readonly db: StateBackend;
 
-  constructor(db: DiskBackend) {
+  constructor(db: StateBackend) {
     this.db = db;
   }
 
@@ -443,7 +475,7 @@ export class DiskSessionStore implements SessionStore {
       endedReason: null,
     };
     this.db.state.sessions.push(rec);
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -455,7 +487,7 @@ export class DiskSessionStore implements SessionStore {
       rec.endedAt = new Date();
       rec.endedReason = reason ?? null;
     }
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -471,9 +503,9 @@ export class DiskSessionStore implements SessionStore {
 }
 
 export class DiskPermissionStore implements PermissionStore {
-  private readonly db: DiskBackend;
+  private readonly db: StateBackend;
 
-  constructor(db: DiskBackend) {
+  constructor(db: StateBackend) {
     this.db = db;
   }
 
@@ -482,12 +514,12 @@ export class DiskPermissionStore implements PermissionStore {
     if (existing) {
       existing.granted = granted;
       existing.updatedAt = new Date();
-      this.db.persist();
+      await this.db.persist();
       return { ...existing };
     }
     const rec: PermissionRecord = { deviceId, feature, granted, updatedAt: new Date() };
     this.db.state.permissions.push(rec);
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -501,9 +533,9 @@ export class DiskPermissionStore implements PermissionStore {
 }
 
 export class DiskTransferStore implements TransferStore {
-  private readonly db: DiskBackend;
+  private readonly db: StateBackend;
 
-  constructor(db: DiskBackend) {
+  constructor(db: StateBackend) {
     this.db = db;
   }
 
@@ -524,7 +556,7 @@ export class DiskTransferStore implements TransferStore {
       expiresAt: new Date(now.getTime() + TRANSFER_TTL_MS),
     };
     this.db.state.transfers.push(rec);
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -537,7 +569,7 @@ export class DiskTransferStore implements TransferStore {
     if (!rec) return null;
     rec.status = status;
     if (error !== undefined) rec.error = error;
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -545,7 +577,7 @@ export class DiskTransferStore implements TransferStore {
     const rec = this.db.state.transfers.find((t) => t.id === id);
     if (rec) {
       rec.sha256Hash = sha256;
-      this.db.persist();
+      await this.db.persist();
     }
   }
 
@@ -553,7 +585,7 @@ export class DiskTransferStore implements TransferStore {
     const rec = this.db.state.transfers.find((t) => t.id === id);
     if (rec) {
       rec.size = size;
-      this.db.persist();
+      await this.db.persist();
     }
   }
 
@@ -561,7 +593,7 @@ export class DiskTransferStore implements TransferStore {
     const idx = this.db.state.transfers.findIndex((t) => t.id === id);
     if (idx >= 0) {
       this.db.state.transfers.splice(idx, 1);
-      this.db.persist();
+      await this.db.persist();
     }
   }
 
@@ -575,7 +607,7 @@ export class DiskTransferStore implements TransferStore {
         expired.push({ ...rec });
       }
     }
-    if (expired.length > 0) this.db.persist();
+    if (expired.length > 0) await this.db.persist();
     return expired;
   }
 
@@ -586,9 +618,9 @@ export class DiskTransferStore implements TransferStore {
 }
 
 export class DiskActivityLogStore implements ActivityLogStore {
-  private readonly db: DiskBackend;
+  private readonly db: StateBackend;
 
-  constructor(db: DiskBackend) {
+  constructor(db: StateBackend) {
     this.db = db;
   }
 
@@ -602,7 +634,7 @@ export class DiskActivityLogStore implements ActivityLogStore {
       createdAt: new Date(),
     };
     this.db.state.activityLogs.push(rec);
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -620,9 +652,9 @@ export class DiskActivityLogStore implements ActivityLogStore {
 }
 
 export class DiskAutomationRuleStore implements AutomationRuleStore {
-  private readonly db: DiskBackend;
+  private readonly db: StateBackend;
 
-  constructor(db: DiskBackend) {
+  constructor(db: StateBackend) {
     this.db = db;
   }
 
@@ -640,7 +672,7 @@ export class DiskAutomationRuleStore implements AutomationRuleStore {
       updatedAt: now,
     };
     this.db.state.automationRules.push(rec);
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -665,7 +697,7 @@ export class DiskAutomationRuleStore implements AutomationRuleStore {
     if (patch.threshold !== undefined) rec.threshold = patch.threshold;
     if (patch.enabled !== undefined) rec.enabled = patch.enabled;
     rec.updatedAt = new Date();
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -673,15 +705,15 @@ export class DiskAutomationRuleStore implements AutomationRuleStore {
     const idx = this.db.state.automationRules.findIndex((r) => r.id === id);
     if (idx < 0) return false;
     this.db.state.automationRules.splice(idx, 1);
-    this.db.persist();
+    await this.db.persist();
     return true;
   }
 }
 
 export class DiskNotificationStore implements NotificationStore {
-  private readonly db: DiskBackend;
+  private readonly db: StateBackend;
 
-  constructor(db: DiskBackend) {
+  constructor(db: StateBackend) {
     this.db = db;
   }
 
@@ -698,7 +730,7 @@ export class DiskNotificationStore implements NotificationStore {
       createdAt: new Date(),
     };
     this.db.state.notifications.push(rec);
-    this.db.persist();
+    await this.db.persist();
     return { ...rec };
   }
 
@@ -723,7 +755,7 @@ export class DiskNotificationStore implements NotificationStore {
 
 // --- Blob di disk (streaming) ---
 
-function sanitizeBlobId(id: string): string {
+export function sanitizeBlobId(id: string): string {
   return id.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 200) || "blob";
 }
 
@@ -740,13 +772,13 @@ export class DiskBlobStore implements BlobStore {
     return join(this.dir, `${sanitizeBlobId(id)}.bin`);
   }
 
-  put(id: string, data: Buffer): void {
+  async put(id: string, data: Buffer): Promise<void> {
     const tmp = `${this.filePath(id)}.tmp-${process.pid}`;
     writeFileSync(tmp, data);
     renameSync(tmp, this.filePath(id));
   }
 
-  get(id: string): Buffer | null {
+  async get(id: string): Promise<Buffer | null> {
     try {
       return readFileSync(this.filePath(id));
     } catch {
@@ -754,15 +786,15 @@ export class DiskBlobStore implements BlobStore {
     }
   }
 
-  delete(id: string): void {
+  async delete(id: string): Promise<void> {
     try { unlinkSync(this.filePath(id)); } catch { /* sudah tidak ada */ }
   }
 
-  exists(id: string): boolean {
+  async exists(id: string): Promise<boolean> {
     return existsSync(this.filePath(id));
   }
 
-  size(id: string): number | null {
+  async size(id: string): Promise<number | null> {
     try {
       return statSync(this.filePath(id)).size;
     } catch {

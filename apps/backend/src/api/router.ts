@@ -384,13 +384,13 @@ export function createRestRouter(deps: RestDeps): RestHandler {
       try {
         result = await streamRequestToStream(req, ws, MAX_TRANSFER_BYTES);
       } catch (err) {
-        blobStore.delete(rec.id);
+        await blobStore.delete(rec.id);
         throw err;
       }
       // Verifikasi tulis mendarat utuh: tulis streaming yang gagal
       // diam-diam (0 byte di disk tanpa error) tidak boleh jadi 200.
-      if (typeof blobStore.size === "function" && blobStore.size(rec.id) !== result.size) {
-        blobStore.delete(rec.id);
+      if (typeof blobStore.size === "function" && (await blobStore.size(rec.id)) !== result.size) {
+        await blobStore.delete(rec.id);
         throw new ApiError(500, "blob-write-failed", `Byte blob tidak mendarat utuh di disk (harap ${result.size} byte).`);
       }
       const updated = await completeUploadStream(transferStore, rec);
@@ -503,14 +503,14 @@ export function createRestRouter(deps: RestDeps): RestHandler {
       try {
         result = await streamRequestToStream(req, ws, MAX_TRANSFER_BYTES);
       } catch (err) {
-        blobStore.delete(rec.id);
+        await blobStore.delete(rec.id);
         await transferStore.setStatus(rec.id, "failed", "Unggahan gagal di tengah jalan.");
         throw err;
       }
       // Verifikasi tulis mendarat utuh: tulis streaming yang gagal
       // diam-diam (0 byte di disk tanpa error) tidak boleh jadi 201.
-      if (typeof blobStore.size === "function" && blobStore.size(rec.id) !== result.size) {
-        blobStore.delete(rec.id);
+      if (typeof blobStore.size === "function" && (await blobStore.size(rec.id)) !== result.size) {
+        await blobStore.delete(rec.id);
         await transferStore.setStatus(rec.id, "failed", "Byte blob tidak mendarat utuh di disk.");
         throw new ApiError(500, "blob-write-failed", `Byte blob tidak mendarat utuh di disk (harap ${result.size} byte).`);
       }
@@ -526,7 +526,7 @@ export function createRestRouter(deps: RestDeps): RestHandler {
       }) ?? false;
       if (!notified) {
         await transferStore.setStatus(rec.id, "failed", "Agent tidak terhubung saat file diunggah.");
-        blobStore.delete(rec.id);
+        await blobStore.delete(rec.id);
         throw new ApiError(409, "device-offline", `Perangkat offline: ${deviceId}`);
       }
       await deps.activityStore
@@ -545,7 +545,7 @@ export function createRestRouter(deps: RestDeps): RestHandler {
       mimeType,
       size: data.length,
     });
-    blobStore.put(rec.id, data);
+    await blobStore.put(rec.id, data);
     await transferStore.setSha256(rec.id, sha256Hex(data));
     const notified = deps.sendToAgent?.(deviceId, {
       type: "file_download_ready",
@@ -557,7 +557,7 @@ export function createRestRouter(deps: RestDeps): RestHandler {
     }) ?? false;
     if (!notified) {
       await transferStore.setStatus(rec.id, "failed", "Agent tidak terhubung saat file diunggah.");
-      blobStore.delete(rec.id);
+      await blobStore.delete(rec.id);
       throw new ApiError(409, "device-offline", `Perangkat offline: ${deviceId}`);
     }
     await deps.activityStore

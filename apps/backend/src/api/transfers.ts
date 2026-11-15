@@ -70,17 +70,17 @@ export interface TransferStore {
 }
 
 export interface BlobStore {
-  put(id: string, data: Buffer): void;
-  get(id: string): Buffer | null;
-  delete(id: string): void;
+  put(id: string, data: Buffer): Promise<void>;
+  get(id: string): Promise<Buffer | null>;
+  delete(id: string): Promise<void>;
   /** Streaming (opsional, diimplementasikan DiskBlobStore): tulis tanpa menahan RAM. */
   createWriteStream?(id: string): NodeJS.WritableStream;
   /** Streaming (opsional, diimplementasikan DiskBlobStore): baca tanpa menahan RAM. */
   createReadStream?(id: string): NodeJS.ReadableStream | null;
-  exists?(id: string): boolean;
+  exists?(id: string): Promise<boolean>;
   /** Ukuran byte blob yang tersimpan (null bila tidak ada) — dipakai
    * untuk memverifikasi tulis streaming benar-benar mendarat utuh. */
-  size?(id: string): number | null;
+  size?(id: string): Promise<number | null>;
 }
 
 export function newTransferId(): string {
@@ -147,19 +147,19 @@ export class MemoryTransferStore implements TransferStore {
 export class MemoryBlobStore implements BlobStore {
   private readonly blobs = new Map<string, Buffer>();
 
-  put(id: string, data: Buffer): void {
+  async put(id: string, data: Buffer): Promise<void> {
     this.blobs.set(id, data);
   }
 
-  get(id: string): Buffer | null {
+  async get(id: string): Promise<Buffer | null> {
     return this.blobs.get(id) ?? null;
   }
 
-  delete(id: string): void {
+  async delete(id: string): Promise<void> {
     this.blobs.delete(id);
   }
 
-  size(id: string): number | null {
+  async size(id: string): Promise<number | null> {
     const buf = this.blobs.get(id);
     return buf === undefined ? null : buf.length;
   }
@@ -176,7 +176,7 @@ export async function expireIfNeeded(
   rec: TransferRecord,
 ): Promise<TransferRecord> {
   if (!isTerminal(rec.status) && Date.now() > rec.expiresAt.getTime()) {
-    blobs.delete(rec.id);
+    await blobs.delete(rec.id);
     const updated = await store.setStatus(rec.id, "expired");
     return updated ?? { ...rec, status: "expired" as TransferStatus };
   }
@@ -203,7 +203,7 @@ export async function completeUpload(
   if (rec.status !== "waiting-upload") {
     throw new ApiError(409, "wrong-status", `Transfer sudah berstatus ${rec.status}.`);
   }
-  blobs.put(rec.id, data);
+  await blobs.put(rec.id, data);
   const updated = await store.setStatus(rec.id, "ready");
   return updated ?? rec;
 }
@@ -242,7 +242,7 @@ export async function takeBlobStreamForDownload(
   if (!stream) throw new ApiError(404, "blob-not-found", "Blob transfer sudah tidak tersedia.");
   // Jangan alirkan blob hantu: bila berkas di disk tidak ada (mis. tulis
   // gagal), jawab 404 bersih — bukan putuskan soket di tengah respons.
-  if (typeof blobs.exists === "function" && !blobs.exists(rec.id)) {
+  if (typeof blobs.exists === "function" && !(await blobs.exists(rec.id))) {
     throw new ApiError(404, "blob-not-found", "Berkas blob transfer tidak ditemukan di disk.");
   }
   return { record: rec, stream };
@@ -264,7 +264,7 @@ export async function takeBlobStreamForAgent(
   if (!stream) throw new ApiError(404, "blob-not-found", "Blob transfer sudah tidak tersedia.");
   // Jangan alirkan blob hantu: bila berkas di disk tidak ada (mis. tulis
   // gagal), jawab 404 bersih — bukan putuskan soket di tengah respons.
-  if (typeof blobs.exists === "function" && !blobs.exists(rec.id)) {
+  if (typeof blobs.exists === "function" && !(await blobs.exists(rec.id))) {
     throw new ApiError(404, "blob-not-found", "Berkas blob transfer tidak ditemukan di disk.");
   }
   return { record: rec, stream };
@@ -276,7 +276,7 @@ export async function finishDownloadStream(
   blobs: BlobStore,
   rec: TransferRecord,
 ): Promise<TransferRecord> {
-  blobs.delete(rec.id);
+  await blobs.delete(rec.id);
   const updated = await store.setStatus(rec.id, "done");
   return updated ?? rec;
 }
@@ -293,9 +293,9 @@ export async function takeBlobForDownload(
   if (rec.status !== "ready") {
     throw new ApiError(409, "wrong-status", `Blob belum siap (status ${rec.status}).`);
   }
-  const data = blobs.get(rec.id);
+  const data = await blobs.get(rec.id);
   if (!data) throw new ApiError(404, "blob-not-found", "Blob transfer sudah tidak tersedia.");
-  blobs.delete(rec.id);
+  await blobs.delete(rec.id);
   const updated = await store.setStatus(rec.id, "done");
   return { record: updated ?? rec, data };
 }
@@ -312,7 +312,7 @@ export async function takeBlobForAgent(
   if (rec.status !== "ready") {
     throw new ApiError(409, "wrong-status", `Blob belum siap (status ${rec.status}).`);
   }
-  const data = blobs.get(rec.id);
+  const data = await blobs.get(rec.id);
   if (!data) throw new ApiError(404, "blob-not-found", "Blob transfer sudah tidak tersedia.");
   return { record: rec, data };
 }
@@ -327,7 +327,7 @@ export async function finishTransfer(
 ): Promise<TransferRecord> {
   if (rec.direction !== "upload") return rec;
   if (isTerminal(rec.status)) return rec;
-  blobs.delete(rec.id);
+  await blobs.delete(rec.id);
   const updated = await store.setStatus(rec.id, ok ? "done" : "failed", error ?? null);
   return updated ?? rec;
 }

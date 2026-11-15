@@ -20,6 +20,5 @@ prata-remote-full-release.tar.gz
 prata-remote-full-release.zip
 .gradle/
 .gradle-home/
-gradle/wrapper/gradle-wrapper.jar
 **/build/
 **/.cxx/

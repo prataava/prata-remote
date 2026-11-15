@@ -66,7 +66,8 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     // WebRTC (SurfaceViewRenderer + EglBase dipakai langsung di modul ini;
     // implementation :shared tidak diturunkan ke consumer).
-    implementation("org.webrtc:google-webrtc:1.0.32006")
+    // Fork LiveKit (pengganti google-webrtc JCenter yang mati) — lihat agent/build.gradle.kts.
+    implementation("io.github.webrtc-sdk:android:125.6422.07")
     // Biometrik (jalur buka alternatif kunci aplikasi) + FragmentActivity
     // (BiometricPrompt membutuhkan FragmentActivity sebagai host).
     implementation("androidx.biometric:biometric:1.2.0-alpha05")

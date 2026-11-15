@@ -33,8 +33,20 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # Runner ubuntu-latest SUDAH membawa Android SDK lengkap
+      # ($ANDROID_HOME=/usr/local/lib/android/sdk). android-actions/setup-android@v3
+      # RUSAK di sini: ia menjalankan `sdkmanager tools`, padahal paket `tools`
+      # sudah tidak ada di cmdline-tools modern (16.0) -> exit 1 (run 43721841801).
+      # Ganti dengan sdkmanager langsung untuk paket yang dipakai proyek
+      # (compileSdk 35, AGP default build-tools 35.0.0). Idempotent: paket yang
+      # sudah terpasang di image dilewati.
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        run: |
+          CT="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$CT" ] || CT="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
+          echo "sdkmanager: $CT"
+          yes | "$CT" --licenses >/dev/null 2>&1 || true
+          "$CT" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Verifikasi statis (tanpa Gradle)
         run: python3 tools/verify.py

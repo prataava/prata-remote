@@ -32,6 +32,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -118,7 +119,7 @@ class AgentForegroundService : Service() {
         }
         projectionCallback = callback
         projection.registerCallback(callback, Handler(Looper.getMainLooper()))
-        MediaProjectionHolder.set(projection)
+        MediaProjectionHolder.set(projection, data)
         val notification = buildNotification("Berbagi layar aktif — layar perangkat ini sedang dibagikan.")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(

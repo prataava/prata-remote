@@ -20,6 +20,7 @@ import android.graphics.Path
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
@@ -146,7 +147,11 @@ class PrataAccessibilityService : AccessibilityService() {
         }
     }
 
-    /** Tekan Enter pada node input yang sedang fokus (ACTION_IME_ENTER). */
+    /**
+     * Tekan Enter pada node input yang sedang fokus.
+     * CATATAN: AccessibilityNodeInfo.ACTION_IME_ENTER TIDAK ADA di SDK
+     * (compileSdk 35) — Enter dikirim sebagai key event lewat service.
+     */
     fun pressEnterOnFocusedNode(): Boolean {
         val root = rootInActiveWindow
         if (root == null) {
@@ -160,9 +165,10 @@ class PrataAccessibilityService : AccessibilityService() {
                 return false
             }
             try {
-                val ok = node.performAction(AccessibilityNodeInfo.ACTION_IME_ENTER)
-                Log.i(TAG, "ACTION_IME_ENTER -> $ok.")
-                return ok
+                val down = dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
+                val up = dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+                Log.i(TAG, "ENTER key event -> down=$down up=$up.")
+                return down || up
             } finally {
                 node.recycle()
             }

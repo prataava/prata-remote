@@ -443,11 +443,14 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
                 val result = RetrofitClient.safeCall { api.pairingPoll(PairingPollRequest(id, code)) }
                 if (result is ApiResult.Ok) {
                     val poll = result.value
-                    if (poll.status == "consumed" && !poll.agentToken.isNullOrBlank() && !poll.deviceId.isNullOrBlank()) {
+                    // deviceId disalin ke val lokal: smart cast tidak berlaku
+                    // untuk properti var publik dari modul lain.
+                    val deviceId = poll.deviceId
+                    if (poll.status == "consumed" && !poll.agentToken.isNullOrBlank() && !deviceId.isNullOrBlank()) {
                         tokenStore.agentToken = poll.agentToken
-                        tokenStore.deviceId = poll.deviceId
+                        tokenStore.deviceId = deviceId
                         stopLoops()
-                        enterPaired(poll.deviceId)
+                        enterPaired(deviceId)
                         break
                     }
                     if (poll.status == "expired" || poll.status == "revoked") {
@@ -591,12 +594,12 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     private fun startProjectionCollection() {
         projectionJob?.cancel()
         projectionJob = viewModelScope.launch {
-            MediaProjectionHolder.projection.collect { projection ->
-                if (projection == null) return@collect
+            MediaProjectionHolder.permissionIntent.collect { permissionIntent ->
+                if (permissionIntent == null) return@collect
                 if (webRtcClient != null) return@collect
                 try {
                     val capturer = ScreenCapturerAndroid(
-                        projection,
+                        permissionIntent,
                         object : MediaProjection.Callback() {
                             override fun onStop() {
                                 viewModelScope.launch { stopScreenShare() }

@@ -63,6 +63,12 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     // Storage Access Framework (DocumentFile) untuk File Manager.
     implementation("androidx.documentfile:documentfile:1.0.1")
+    // OkHttp/Retrofit dipakai langsung di modul ini (OkHttpClient,
+    // RequestBody upload blob, retrofit2.Response). Versi SAMA dengan
+    // :shared — implementation tidak diturunkan antar modul.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     // WebRTC dipakai langsung di AgentViewModel (ScreenCapturerAndroid).
     // Versi SAMA dengan modul :shared (implementation tidak diturunkan).
     // CATATAN: org.webrtc:google-webrtc:1.0.32006 (M83, 2020) TIDAK ADA di

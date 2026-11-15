@@ -64,6 +64,12 @@ dependencies {
     // WAJIB untuk parent tema XML Theme.Material3.DayNight.NoActionBar
     // di res/values/themes.xml (bukan bagian dari Compose material3).
     implementation("com.google.android.material:material:1.12.0")
+    // OkHttp/Okio dipakai langsung di modul ini (MediaType, RequestBody,
+    // BufferedSink). Versi SAMA dengan :shared — implementation tidak
+    // diturunkan antar modul.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     // WebRTC (SurfaceViewRenderer + EglBase dipakai langsung di modul ini;
     // implementation :shared tidak diturunkan ke consumer).
     // Fork LiveKit (pengganti google-webrtc JCenter yang mati) — lihat agent/build.gradle.kts.

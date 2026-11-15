@@ -1,0 +1,36 @@
+# PRATA Remote — Infrastruktur (Command 001, Phase 1)
+# Jalankan di host deploy (bukan di VM ini — docker tidak tersedia di sini):
+#   docker compose -f infra/docker-compose.yml up -d
+# Lalu:  DATABASE_URL=postgresql://prata:prata@localhost:5432/prata_remote
+#        TURN_URLS=turn:localhost:3478 (Phase 2)
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: prata
+      POSTGRES_PASSWORD: prata
+      POSTGRES_DB: prata_remote
+    ports:
+      - "5432:5432"
+    volumes:
+      - prata-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prata -d prata_remote"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  coturn:
+    image: coturn/coturn:4.7
+    command: ["-c", "/etc/coturn/turnserver.conf"]
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "49152-49252:49152-49252/udp"
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    depends_on:
+      - postgres
+
+volumes:
+  prata-postgres:

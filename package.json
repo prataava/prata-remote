@@ -1,0 +1,1 @@
+{"description":"PRATA Remote — remote management Android: controller + agent + web dashboard + signaling backend","name":"prata-remote","packageManager":"npm@10.9.4","private":true,"scripts":{"backend:dev":"npm --workspace @prata/backend run dev","backend:test":"npm --workspace @prata/backend run test"},"version":"0.1.0","workspaces":["apps/*","packages/*"]}

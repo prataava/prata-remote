@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">PRATA Remote memakai layanan ini HANYA untuk menjalankan ketukan dan geseran yang kamu kirim dari Controller saat berbagi layar. Layanan ini tidak membaca isi layar dan tidak mengklik apa pun sendiri.</string>
+</resources>

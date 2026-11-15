@@ -1,0 +1,25 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.log
+.DS_Store
+.idea/
+*.iml
+local.properties
+*.keystore
+*.jks
+google-services.json
+# PRATA Remote: data runtime & artefak rilis (jangan commit)
+apps/backend/data/
+apps/backend/public/releases/
+*.apk
+*.aab
+prata-remote-full-release.tar.gz
+prata-remote-full-release.zip
+.gradle/
+.gradle-home/
+gradle/wrapper/gradle-wrapper.jar
+**/build/
+**/.cxx/

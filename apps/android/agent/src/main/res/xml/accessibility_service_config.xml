@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PRATA Remote — Konfigurasi AccessibilityService (Command 005) -->
+<!-- Hanya untuk eksekusi gesture remote (tap/swipe) dari Controller. -->
+<!-- Tidak membaca konten layar (canRetrieveWindowContent=false). -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault"
+    android:canPerformGestures="true"
+    android:canRetrieveWindowContent="false"
+    android:description="@string/accessibility_service_description"
+    android:settingsActivity="com.prata.remote.agent.MainActivity" />

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PRATA Remote — Web Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="logo">PRATA <span>Remote</span></div>
+    <div class="spacer"></div>
+    <span id="ws-status" title="Status WebSocket"><span class="ws-dot"></span><span id="ws-status-text">Belum terhubung</span></span>
+    <span class="header-user" id="header-user"></span>
+    <button class="btn ghost sm" id="btn-logout" type="button">Keluar</button>
+  </header>
+
+  <nav class="app-nav" id="app-nav" aria-label="Navigasi dashboard">
+    <button type="button" data-page="overview">Overview</button>
+    <button type="button" data-page="devices">Device Center</button>
+    <button type="button" data-page="live">Live Control</button>
+    <button type="button" data-page="files">File Transfer</button>
+    <button type="button" data-page="monitoring">Monitoring</button>
+    <button type="button" data-page="automation">Automation</button>
+    <button type="button" data-page="security">Security &amp; Logs</button>
+    <button type="button" data-page="settings">Settings</button>
+  </nav>
+
+  <main>
+    <!-- Login -->
+    <section id="login-view" class="login-wrap hidden">
+      <div class="card">
+        <h1 style="margin:0 0 4px">Masuk Dashboard</h1>
+        <p class="muted">Masuk dengan akun PRATA Remote yang sama dengan aplikasi Controller.</p>
+        <div id="login-error" class="error-box hidden"></div>
+        <form id="login-form">
+          <label for="login-email">Email</label>
+          <input id="login-email" type="email" autocomplete="username" required>
+          <label for="login-password">Kata sandi</label>
+          <input id="login-password" type="password" autocomplete="current-password" required>
+          <label for="login-server">Alamat server backend</label>
+          <input id="login-server" type="text" placeholder="http://localhost:8080" value="http://localhost:8080">
+          <div style="margin-top:16px">
+            <button class="btn primary" type="submit" style="width:100%">Masuk</button>
+          </div>
+        </form>
+        <p class="small muted" style="margin-top:14px">Token JWT disimpan di localStorage browser ini saja. Server harus mengizinkan CORS (env CORS_ORIGIN) bila dashboard disajikan dari origin lain.</p>
+      </div>
+    </section>
+
+    <!-- Halaman aplikasi -->
+    <section id="page-view">
+      <div id="page"></div>
+    </section>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/ws.js"></script>
+  <script src="js/rtc.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

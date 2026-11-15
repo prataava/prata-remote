@@ -1,0 +1,60 @@
+# PRATA Remote — CI: build APK Agent & Controller (FINAL, Bagian 8)
+# Gradle tidak bisa berjalan di VM sandbox Muse (JVM tak bisa menulis
+# sesudah membaca ~/workspace), jadi APK dibangun di GitHub Actions.
+# Push ke main (atau jalankan manual) -> dua APK debug di artifacts.
+name: Build Android APKs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/android/**"
+      - ".github/workflows/build-android.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/android/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Assemble Agent & Controller (debug)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/android
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Verifikasi statis (tanpa Gradle)
+        run: python3 tools/verify.py
+
+      - name: Build Agent (debug)
+        run: ./gradlew :agent:assembleDebug --stacktrace
+
+      - name: Build Controller (debug)
+        run: ./gradlew :controller:assembleDebug --stacktrace
+
+      - name: Upload APK Agent
+        uses: actions/upload-artifact@v4
+        with:
+          name: prata-remote-agent-debug
+          path: agent/build/outputs/apk/debug/agent-debug.apk
+          if-no-files-found: error
+
+      - name: Upload APK Controller
+        uses: actions/upload-artifact@v4
+        with:
+          name: prata-remote-controller-debug
+          path: controller/build/outputs/apk/debug/controller-debug.apk
+          if-no-files-found: error

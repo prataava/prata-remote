@@ -1,0 +1,279 @@
+// PRATA Remote — Skema database (Command 001, Phase 1: Foundation)
+// PostgreSQL + Prisma. Aturan keamanan yang dikodekan di sini:
+// - Kata sandi pengguna TIDAK PERNAH disimpan mentah (passwordHash, bcrypt/argon2 di service auth).
+// - Token agen TIDAK PERNAH disimpan mentah (agentTokenHash = SHA-256 dari token).
+// - Kode pairing QR TIDAK PERNAH disimpan mentah (codeHash = SHA-256 dari kode 6 karakter).
+// - Token/kode yang bocor dari database TIDAK BISA dipakai langsung untuk login.
+// Validasi: npx prisma validate  |  Migrasi: npx prisma migrate dev (butuh DATABASE_URL aktif)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum DeviceStatus {
+  OFFLINE
+  ONLINE
+  CONNECTING
+}
+
+enum PairingStatus {
+  PENDING
+  CONSUMED
+  EXPIRED
+  REVOKED
+}
+
+enum SessionStatus {
+  REQUESTED
+  ACTIVE
+  ENDED
+  REJECTED
+}
+
+enum SessionType {
+  SCREEN
+  CAMERA
+}
+
+// Akun pemilik perangkat + operator controller (web dashboard & aplikasi controller).
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String?
+  role         UserRole  @default(USER)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  devices      Device[]
+  sessions     Session[] @relation("ControllerSessions")
+  pairings     Pairing[] @relation("PairingsCreated")
+  transfers    FileTransfer[]
+  activityLogs ActivityLog[]
+  rules        AutomationRule[]
+  notifications Notification[]
+
+  @@map("users")
+}
+
+// Satu HP Android yang menjalankan aplikasi Agent (com.prata.remote.agent).
+// status/lastSeenAt adalah cermin terakhir dari signaling server —
+// sumber kebenaran real-time tetap WebSocket, BUKAN tabel ini.
+model Device {
+  id             String       @id @default(cuid())
+  ownerId        String
+  owner          User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name           String
+  model          String?
+  manufacturer   String?
+  androidVersion String?
+  agentVersion   String?
+  agentTokenHash String
+  group          String?
+  status         DeviceStatus @default(OFFLINE)
+  lastSeenAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  pairings       Pairing[]
+  sessions       Session[]
+  transfers      FileTransfer[]
+  keys           DeviceKey[]
+  permissions    Permission[]
+  activityLogs   ActivityLog[]
+  rules          AutomationRule[]
+  notifications  Notification[]
+
+  @@index([ownerId])
+  @@index([status])
+  @@map("devices")
+}
+
+// Pendaftaran perangkat via QR Code — REVISI Command 002:
+// Pairing adalah rekaman PRA-registrasi: dibuat oleh Agent yang BELUM
+// terdaftar (tanpa user, tanpa device), lalu diisi saat Controller
+// mengonfirmasi hasil scan QR.
+// Alur: Agent POST /pairing/init -> server membuat Pairing (PENDING,
+// hanya codeHash yang disimpan) + mengembalikan kode 6 karakter ->
+// Agent menampilkan QR `prata://pair/<pairingId>/<kode>` ->
+// Controller scan + POST /pairing/confirm (JWT) -> server memverifikasi
+// codeHash, membuat Device + agentToken permanen, menandai CONSUMED ->
+// Agent POST /pairing/poll (dengan kode yang sama) mengambil agentToken
+// SEKALI, lalu token dihapus dari rekaman pairing (issuedToken -> null).
+// Kode kedaluwarsa otomatis (expiresAt, default 10 menit dari pembuatan);
+// 5x kode salah -> status REVOKED.
+model Pairing {
+  id             String        @id @default(cuid())
+  deviceId       String?
+  device         Device?       @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  codeHash       String
+  attempts       Int           @default(0)
+  status         PairingStatus @default(PENDING)
+  deviceName     String?
+  deviceModel    String?
+  manufacturer   String?
+  androidVersion String?
+  agentVersion   String?
+  issuedToken    String?
+  createdById    String?
+  createdBy      User?         @relation("PairingsCreated", fields: [createdById], references: [id], onDelete: Cascade)
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdAt      DateTime      @default(now())
+
+  @@index([deviceId])
+  @@index([status, expiresAt])
+  @@map("pairings")
+}
+
+// Satu sesi remote (layar atau kamera) antara controller dan satu device.
+// Direkam untuk audit: siapa, perangkat apa, kapan mulai/selesai, kenapa berakhir.
+model Session {
+  id           String        @id @default(cuid())
+  deviceId     String
+  device       Device        @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  controllerId String
+  controller   User          @relation("ControllerSessions", fields: [controllerId], references: [id], onDelete: Cascade)
+  type         SessionType   @default(SCREEN)
+  status       SessionStatus @default(REQUESTED)
+  startedAt    DateTime      @default(now())
+  endedAt      DateTime?
+  endedReason  String?
+
+  @@index([deviceId])
+  @@index([controllerId])
+  @@index([status])
+  @@map("sessions")
+}
+
+// Transfer file dua arah (Command 008, Phase 3). Hanya METADATA yang
+// disimpan di sini — byte file TIDAK PERNAH masuk database (disimpan
+// sementara di BlobStore server, dihapus sesudah selesai/kedaluwarsa).
+// Download: controller minta -> Agent PUT blob -> controller GET blob.
+// Upload: controller POST blob -> Agent GET blob -> ack file_transfer_done.
+model FileTransfer {
+  id         String   @id @default(cuid())
+  deviceId   String
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  ownerId    String
+  owner      User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  direction  String
+  docId      String?
+  fileName   String
+  mimeType   String?
+  size       BigInt?
+  sha256Hash String?
+  status     String   @default("waiting-upload")
+  error      String?
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+
+  @@index([deviceId])
+  @@index([ownerId])
+  @@index([expiresAt])
+  @@map("file_transfers")
+}
+
+// Kunci/token perangkat (FINAL): satu device bisa punya banyak kunci
+// sepanjang riwayat (rotasi); masing-masing bisa dicabut satu per satu.
+// agentTokenHash di Device adalah kunci aktif utama; baris di sini adalah
+// catatan kunci (termasuk kunci lama yang sudah di-revoke). Token mentah
+// TIDAK PERNAH disimpan — hanya SHA-256.
+model DeviceKey {
+  id         String    @id @default(cuid())
+  deviceId   String
+  device     Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  keyHash    String
+  label      String?
+  revoked    Boolean   @default(false)
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([deviceId])
+  @@index([keyHash])
+  @@map("device_keys")
+}
+
+// Status persetujuan fitur dari Agent (FINAL). Satu baris per
+// (device, feature); feature ∈ screen, accessibility, saf, notification,
+// camera. Diperbarui Agent lewat WS permission_report; dibaca Controller.
+model Permission {
+  deviceId  String
+  device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  feature   String
+  granted   Boolean
+  updatedAt DateTime @updatedAt
+
+  @@id([deviceId, feature])
+  @@index([deviceId])
+  @@map("permissions")
+}
+
+// Audit trail keamanan (FINAL): login, pairing, sesi mulai/akhir,
+// transfer file, cabut perangkat, alert otomatisasi. Append-only dari
+// sisi aplikasi (tidak ada endpoint hapus).
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId  String?
+  device    Device?  @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  action    String
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([deviceId, createdAt])
+  @@map("activity_logs")
+}
+
+// Aturan otomatisasi (FINAL). conditionType ∈ battery_below,
+// storage_above (persen penyimpanan TERPAKAI di atas ambang),
+// device_offline, session_started, session_ended. threshold dipakai
+// battery_below & storage_above (persen 0..100).
+model AutomationRule {
+  id            String   @id @default(cuid())
+  ownerId       String
+  owner         User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  deviceId      String?
+  device        Device?  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  name          String
+  conditionType String
+  threshold     Int?
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([deviceId])
+  @@map("automation_rules")
+}
+
+// Riwayat notifikasi (FINAL): notifikasi perangkat yang diteruskan Agent
+// (kind "device") + peringatan sistem/otomatisasi (kind "automation").
+model Notification {
+  id          String   @id @default(cuid())
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  deviceId    String?
+  device      Device?  @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  kind        String   @default("device")
+  packageName String?
+  appName     String?
+  title       String?
+  text        String?
+  createdAt   DateTime @default(now())
+
+  @@index([ownerId, createdAt])
+  @@index([deviceId, createdAt])
+  @@map("notifications")
+}

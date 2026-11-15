@@ -1,0 +1,227 @@
+/* PRATA Remote — Web Dashboard (FINAL, Bagian 7)
+   Hybrid Premium Glass: Midnight Navy + Electric Cyan + Mint + Violet.
+   Glassmorphism HANYA pada kartu utama & header navigasi; area kerja
+   (tabel, form, video) tetap solid. Transisi 180–350ms. */
+:root {
+  --bg: #080d18;
+  --bg-2: #0b1220;
+  --surface: #111b2b;
+  --surface-2: #16233a;
+  --line: #22314d;
+  --text: #f2f6fc;
+  --text-dim: #9fb0c8;
+  --primary: #50d8f5;
+  --secondary: #72e6b4;
+  --accent: #9b8cff;
+  --danger: #ff7a7a;
+  --warn: #ffc857;
+  --radius: 18px;
+  --radius-sm: 12px;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --t-fast: 180ms;
+  --t-med: 280ms;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Header kaca */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: rgba(17, 27, 43, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+.app-header .logo { font-size: 20px; font-weight: 800; letter-spacing: 0.4px; }
+.app-header .logo span { color: var(--primary); }
+.app-header .spacer { flex: 1; }
+.ws-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--warn); display: inline-block; margin-right: 6px;
+  vertical-align: middle; transition: background var(--t-fast);
+}
+.ws-dot.on { background: var(--secondary); }
+.ws-dot.off { background: var(--danger); }
+.header-user { color: var(--text-dim); font-size: 13px; }
+
+/* Navigasi */
+.app-nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 14px 24px 0;
+}
+.app-nav button {
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--t-fast) ease;
+}
+.app-nav button:hover { color: var(--text); border-color: var(--line); }
+.app-nav button.active {
+  color: #06121f;
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+main { padding: 20px 24px 48px; max-width: 1180px; margin: 0 auto; }
+.page-head { margin-bottom: 18px; }
+.page-head h1 { margin: 0 0 4px; font-size: 24px; }
+.page-head p { margin: 0; color: var(--text-dim); }
+
+/* Kartu utama (kaca) */
+.card {
+  background: rgba(17, 27, 43, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+.card h2 { margin: 0 0 12px; font-size: 17px; }
+.card h3 { margin: 0 0 8px; font-size: 15px; }
+.muted { color: var(--text-dim); }
+.small { font-size: 13px; }
+
+.grid { display: grid; gap: 16px; }
+.grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 900px) {
+  .grid.cols-3, .grid.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .grid.cols-2, .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr; }
+  main { padding: 16px 14px 40px; }
+  .app-header, .app-nav { padding-left: 14px; padding-right: 14px; }
+}
+
+.stat-num { font-size: 34px; font-weight: 800; line-height: 1.1; }
+.stat-num.cyan { color: var(--primary); }
+.stat-num.mint { color: var(--secondary); }
+.stat-num.violet { color: var(--accent); }
+.stat-label { color: var(--text-dim); font-size: 13px; }
+
+/* Tombol & form (solid) */
+.btn {
+  font: inherit; font-weight: 600; cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: 9px 16px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  transition: all var(--t-fast) ease;
+}
+.btn:hover { border-color: var(--primary); }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #06121f; }
+.btn.mint { background: var(--secondary); border-color: var(--secondary); color: #06121f; }
+.btn.danger { background: transparent; border-color: var(--danger); color: var(--danger); }
+.btn.danger:hover { background: rgba(255, 122, 122, 0.12); }
+.btn.ghost { background: transparent; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.sm { padding: 5px 10px; font-size: 13px; }
+
+input, select, textarea {
+  font: inherit; color: var(--text);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none; border-color: var(--primary);
+}
+label { display: block; font-size: 13px; color: var(--text-dim); margin: 10px 0 4px; }
+.form-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.form-row > * { flex: 1 1 160px; }
+
+/* Tabel */
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--text-dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+.table-wrap { overflow-x: auto; }
+
+/* Chip status */
+.chip {
+  display: inline-block; padding: 2px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 700;
+}
+.chip.online { background: rgba(114, 230, 180, 0.16); color: var(--secondary); }
+.chip.offline { background: rgba(159, 176, 200, 0.16); color: var(--text-dim); }
+.chip.connecting { background: rgba(255, 200, 87, 0.16); color: var(--warn); }
+.chip.violet { background: rgba(155, 140, 255, 0.18); color: var(--accent); }
+.chip.cyan { background: rgba(80, 216, 245, 0.16); color: var(--primary); }
+
+/* Gauge */
+.gauge { display: flex; align-items: center; gap: 12px; }
+.gauge-bar {
+  flex: 1; height: 10px; border-radius: 999px;
+  background: var(--bg-2); overflow: hidden;
+}
+.gauge-fill { height: 100%; border-radius: 999px; background: var(--primary); transition: width var(--t-med) ease; }
+.gauge-fill.mint { background: var(--secondary); }
+.gauge-fill.violet { background: var(--accent); }
+.gauge-fill.warn { background: var(--warn); }
+.gauge-num { min-width: 52px; text-align: right; font-weight: 700; }
+
+/* Video live */
+.video-wrap {
+  position: relative; background: #000; border-radius: var(--radius);
+  overflow: hidden; border: 1px solid var(--line);
+}
+.video-wrap video { display: block; width: 100%; max-height: 62vh; object-fit: contain; cursor: crosshair; }
+.video-overlay {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--text-dim); background: rgba(8, 13, 24, 0.55); text-align: center; padding: 20px;
+}
+.quickbar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.quality-chip { display: inline-flex; gap: 6px; align-items: center; }
+
+.file-row, .device-row, .rule-row {
+  display: flex; gap: 12px; align-items: center;
+  padding: 10px 4px; border-bottom: 1px solid var(--line);
+}
+.file-row:last-child, .device-row:last-child, .rule-row:last-child { border-bottom: none; }
+.file-row .name, .device-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.alert-box {
+  border: 1px solid var(--warn); background: rgba(255, 200, 87, 0.08);
+  border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 10px;
+}
+.error-box {
+  border: 1px solid var(--danger); background: rgba(255, 122, 122, 0.08);
+  border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 12px;
+}
+.ok-box {
+  border: 1px solid var(--secondary); background: rgba(114, 230, 180, 0.08);
+  border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 12px;
+}
+.login-wrap { max-width: 420px; margin: 8vh auto 0; }
+.login-wrap .card { padding: 28px; }
+.hidden { display: none !important; }

@@ -762,6 +762,14 @@ export class DiskBlobStore implements BlobStore {
     return existsSync(this.filePath(id));
   }
 
+  size(id: string): number | null {
+    try {
+      return statSync(this.filePath(id)).size;
+    } catch {
+      return null;
+    }
+  }
+
   /** Stream tulis: byte mengalir dari request ke disk tanpa menahan RAM. */
   createWriteStream(id: string): ReturnType<typeof createWriteStream> {
     return createWriteStream(this.filePath(id));

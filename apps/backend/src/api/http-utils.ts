@@ -108,8 +108,15 @@ export async function streamRequestToStream(
   const { createHash } = await import("node:crypto");
   const hash = createHash("sha256");
   let total = 0;
+  // Tangkap error tujuan SEJAK AWAL: 'error' yang meletus sebelum
+  // finalizer dipasang tidak boleh hilang diam-diam (kasus nyata:
+  // tulis disk EPERM -> unggahan 201 palsu dengan blob hantu).
+  let destError: Error | null = null;
+  const onDestError = (err: Error) => { destError ??= err; };
+  dest.on("error", onDestError);
   try {
     for await (const chunk of req) {
+      if (destError) throw destError;
       const buf = chunk as Buffer;
       total += buf.length;
       if (total > maxBytes) {
@@ -117,16 +124,24 @@ export async function streamRequestToStream(
         throw new ApiError(413, "body-too-large", `Body melebihi ${maxBytes} byte.`);
       }
       hash.update(buf);
-      if (!dest.write(buf)) await new Promise<void>((resolve) => dest.once("drain", resolve));
+      if (!dest.write(buf)) {
+        await new Promise<void>((resolve, reject) => {
+          dest.once("drain", () => resolve());
+          dest.once("error", (err: Error) => reject(err));
+        });
+      }
+      if (destError) throw destError;
     }
   } catch (err) {
     dest.destroy(err instanceof Error ? err : new Error(String(err)));
     throw err;
   }
   await new Promise<void>((resolve, reject) => {
+    if (destError) { reject(destError); return; }
     dest.on("error", reject);
-    dest.end(resolve);
+    dest.end(() => { if (destError) reject(destError); else resolve(); });
   });
+  if (destError) throw destError;
   return { size: total, sha256Hex: hash.digest("hex") };
 }
 

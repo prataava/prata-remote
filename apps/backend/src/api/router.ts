@@ -387,6 +387,12 @@ export function createRestRouter(deps: RestDeps): RestHandler {
         blobStore.delete(rec.id);
         throw err;
       }
+      // Verifikasi tulis mendarat utuh: tulis streaming yang gagal
+      // diam-diam (0 byte di disk tanpa error) tidak boleh jadi 200.
+      if (typeof blobStore.size === "function" && blobStore.size(rec.id) !== result.size) {
+        blobStore.delete(rec.id);
+        throw new ApiError(500, "blob-write-failed", `Byte blob tidak mendarat utuh di disk (harap ${result.size} byte).`);
+      }
       const updated = await completeUploadStream(transferStore, rec);
       await transferStore.setSha256(rec.id, result.sha256Hex);
       await transferStore.setSize(rec.id, result.size);
@@ -443,7 +449,13 @@ export function createRestRouter(deps: RestDeps): RestHandler {
         });
       }
       stream.on("error", () => {
-        if (!res.writableEnded) res.destroy();
+        // Bila header belum terkirim, jawab 500 bersih; hanya putuskan
+        // soket bila respons sudah mengalir (tidak ada jalan kembali).
+        if (!res.headersSent && !res.writableEnded) {
+          try { sendError(res, new ApiError(500, "blob-read-failed", "Blob transfer gagal dibaca dari disk.")); } catch { res.destroy(); }
+        } else if (!res.writableEnded) {
+          res.destroy();
+        }
       });
       sendStream(res, stream, size, rec.mimeType ?? "application/octet-stream", rec.fileName);
       return;
@@ -494,6 +506,13 @@ export function createRestRouter(deps: RestDeps): RestHandler {
         blobStore.delete(rec.id);
         await transferStore.setStatus(rec.id, "failed", "Unggahan gagal di tengah jalan.");
         throw err;
+      }
+      // Verifikasi tulis mendarat utuh: tulis streaming yang gagal
+      // diam-diam (0 byte di disk tanpa error) tidak boleh jadi 201.
+      if (typeof blobStore.size === "function" && blobStore.size(rec.id) !== result.size) {
+        blobStore.delete(rec.id);
+        await transferStore.setStatus(rec.id, "failed", "Byte blob tidak mendarat utuh di disk.");
+        throw new ApiError(500, "blob-write-failed", `Byte blob tidak mendarat utuh di disk (harap ${result.size} byte).`);
       }
       await transferStore.setSha256(rec.id, result.sha256Hex);
       await transferStore.setSize(rec.id, result.size);

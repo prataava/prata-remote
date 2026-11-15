@@ -78,6 +78,9 @@ export interface BlobStore {
   /** Streaming (opsional, diimplementasikan DiskBlobStore): baca tanpa menahan RAM. */
   createReadStream?(id: string): NodeJS.ReadableStream | null;
   exists?(id: string): boolean;
+  /** Ukuran byte blob yang tersimpan (null bila tidak ada) — dipakai
+   * untuk memverifikasi tulis streaming benar-benar mendarat utuh. */
+  size?(id: string): number | null;
 }
 
 export function newTransferId(): string {
@@ -154,6 +157,11 @@ export class MemoryBlobStore implements BlobStore {
 
   delete(id: string): void {
     this.blobs.delete(id);
+  }
+
+  size(id: string): number | null {
+    const buf = this.blobs.get(id);
+    return buf === undefined ? null : buf.length;
   }
 }
 
@@ -232,6 +240,11 @@ export async function takeBlobStreamForDownload(
   }
   const stream = blobs.createReadStream?.(rec.id);
   if (!stream) throw new ApiError(404, "blob-not-found", "Blob transfer sudah tidak tersedia.");
+  // Jangan alirkan blob hantu: bila berkas di disk tidak ada (mis. tulis
+  // gagal), jawab 404 bersih — bukan putuskan soket di tengah respons.
+  if (typeof blobs.exists === "function" && !blobs.exists(rec.id)) {
+    throw new ApiError(404, "blob-not-found", "Berkas blob transfer tidak ditemukan di disk.");
+  }
   return { record: rec, stream };
 }
 
@@ -249,6 +262,11 @@ export async function takeBlobStreamForAgent(
   }
   const stream = blobs.createReadStream?.(rec.id);
   if (!stream) throw new ApiError(404, "blob-not-found", "Blob transfer sudah tidak tersedia.");
+  // Jangan alirkan blob hantu: bila berkas di disk tidak ada (mis. tulis
+  // gagal), jawab 404 bersih — bukan putuskan soket di tengah respons.
+  if (typeof blobs.exists === "function" && !blobs.exists(rec.id)) {
+    throw new ApiError(404, "blob-not-found", "Berkas blob transfer tidak ditemukan di disk.");
+  }
   return { record: rec, stream };
 }
 

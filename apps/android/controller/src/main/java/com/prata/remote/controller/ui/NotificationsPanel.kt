@@ -81,18 +81,22 @@ fun NotificationsPanel(
                 items(shown, key = { it.at + it.packageName + (it.title ?: "") }) { notif ->
                     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
                         Text(notif.appName, fontWeight = FontWeight.Medium)
-                        if (!notif.title.isNullOrBlank()) {
-                            Text(notif.title, style = MaterialTheme.typography.bodyMedium)
+                        // title/text disalin ke val lokal: smart cast tidak
+                        // berlaku untuk properti publik dari modul lain.
+                        val title = notif.title
+                        if (!title.isNullOrBlank()) {
+                            Text(title, style = MaterialTheme.typography.bodyMedium)
                         }
-                        if (!notif.text.isNullOrBlank()) {
+                        val text = notif.text
+                        if (!text.isNullOrBlank()) {
                             Text(
-                                notif.text,
+                                text,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         Text(
-                            formatNotifTime(notif.at),
+                            formatNotifTime(notif.at ?: ""),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

@@ -78,5 +78,10 @@ dependencies {
     // (BiometricPrompt membutuhkan FragmentActivity sebagai host).
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
     implementation("androidx.fragment:fragment-ktx:1.8.2")
+    // Kunci aplikasi (EncryptedSharedPreferences + MasterKey, dipakai AppLock).
+    implementation("androidx.security:security-crypto:1.0.0")
+    // Ikon Compose tambahan (Icons.Filled.Keyboard dipakai RemoteControlScreen;
+    // ikon itu tidak ada di material-icons-core).
+    implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

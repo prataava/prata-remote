@@ -46,7 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.google.mlkit.vision.barcode.Barcode
+import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
@@ -92,7 +92,7 @@ fun QrScannerScreen(
             }
             cameraProvider = provider
             val preview = Preview.Builder().build().also {
-                it.surfaceProvider = previewView.surfaceProvider
+                it.setSurfaceProvider(ContextCompat.getMainExecutor(context), previewView.surfaceProvider)
             }
             val barcodeScanner = BarcodeScanning.getClient(
                 BarcodeScannerOptions.Builder()

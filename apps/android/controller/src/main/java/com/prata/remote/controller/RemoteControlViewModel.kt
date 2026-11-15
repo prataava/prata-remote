@@ -637,7 +637,7 @@ class RemoteControlViewModel(
         val requestId = UUID.randomUUID().toString()
         pendingFileListRequestId = requestId
         updateState { it.copy(files = it.files.copy(loading = true, error = null, currentDocId = docId)) }
-        signaling?.sendFileListRequest(requestId, docId)
+        signaling?.sendFileListRequest(requestId, deviceId, docId)
     }
 
     fun refreshFiles() {
@@ -666,7 +666,7 @@ class RemoteControlViewModel(
         if (clean.isEmpty()) return
         val requestId = UUID.randomUUID().toString()
         pendingFileOpRequestId = requestId
-        signaling?.sendFileMkdirRequest(requestId, _uiState.value.files.currentDocId, clean)
+        signaling?.sendFileMkdirRequest(requestId, deviceId, _uiState.value.files.currentDocId, clean)
     }
 
     fun renameItem(item: FileItemDto, newName: String) {
@@ -674,13 +674,13 @@ class RemoteControlViewModel(
         if (clean.isEmpty() || clean == item.name) return
         val requestId = UUID.randomUUID().toString()
         pendingFileOpRequestId = requestId
-        signaling?.sendFileRenameRequest(requestId, item.docId, clean)
+        signaling?.sendFileRenameRequest(requestId, deviceId, item.docId, clean)
     }
 
     fun deleteItem(item: FileItemDto) {
         val requestId = UUID.randomUUID().toString()
         pendingFileOpRequestId = requestId
-        signaling?.sendFileDeleteRequest(requestId, item.docId)
+        signaling?.sendFileDeleteRequest(requestId, deviceId, item.docId)
     }
 
     /** Unduh file dari Agent ke folder Downloads HP Controller. */
@@ -696,8 +696,8 @@ class RemoteControlViewModel(
                     api.createTransfer("Bearer $jwt", com.prata.remote.shared.model.CreateTransferRequest(deviceId, item.docId, item.name))
                 }
                 val transfer = when (created) {
-                    is ApiResult.Success -> created.data
-                    is ApiResult.Error -> {
+                    is ApiResult.Ok -> created.value
+                    is ApiResult.Err -> {
                         updateState { it.copy(files = it.files.copy(downloading = null, opStatus = "Gagal meminta unduhan: ${created.message}")) }
                         return@launch
                     }
@@ -707,11 +707,11 @@ class RemoteControlViewModel(
                 repeat(30) {
                     delay(2_000L)
                     val st = RetrofitClient.safeCall { api.getTransfer("Bearer $jwt", transfer.transferId) }
-                    if (st is ApiResult.Success && st.data.transfer.status == "ready") {
+                    if (st is ApiResult.Ok && st.value.transfer.status == "ready") {
                         ready = true
                         return@repeat
                     }
-                    if (st is ApiResult.Success && (st.data.transfer.status == "done" || st.data.transfer.status == "failed" || st.data.transfer.status == "expired")) {
+                    if (st is ApiResult.Ok && (st.value.transfer.status == "done" || st.value.transfer.status == "failed" || st.value.transfer.status == "expired")) {
                         return@repeat
                     }
                 }
@@ -732,8 +732,7 @@ class RemoteControlViewModel(
                         put(MediaStore.Downloads.RELATIVE_PATH, "Download")
                     }
                 }
-                val uri = app.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                if (uri == null) {
+                val uri = app.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: run {
                     updateState { it.copy(files = it.files.copy(downloading = null, opStatus = "Tidak bisa membuat file di Downloads.")) }
                     return@launch
                 }
@@ -778,10 +777,10 @@ class RemoteControlViewModel(
                     )
                 }
                 when (result) {
-                    is ApiResult.Success -> updateState {
+                    is ApiResult.Ok -> updateState {
                         it.copy(files = it.files.copy(uploadStatus = "File dikirim — menunggu Agent menyimpannya…"))
                     }
-                    is ApiResult.Error -> updateState {
+                    is ApiResult.Err -> updateState {
                         it.copy(files = it.files.copy(uploadStatus = "Gagal mengunggah: ${result.message}"))
                     }
                 }
@@ -797,13 +796,13 @@ class RemoteControlViewModel(
         val requestId = UUID.randomUUID().toString()
         pendingAppListRequestId = requestId
         updateState { it.copy(apps = it.apps.copy(loading = true, error = null)) }
-        signaling?.sendAppListRequest(requestId)
+        signaling?.sendAppListRequest(requestId, deviceId)
     }
 
     fun sendAppCommand(command: String, packageName: String) {
         val requestId = UUID.randomUUID().toString()
         pendingAppCommandRequestId = requestId
-        signaling?.sendAppCommand(requestId, command, packageName)
+        signaling?.sendAppCommand(requestId, deviceId, command, packageName)
     }
 
     fun setAppsSystemOnly(systemOnly: Boolean) {

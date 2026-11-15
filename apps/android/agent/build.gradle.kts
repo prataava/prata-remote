@@ -65,6 +65,11 @@ dependencies {
     implementation("androidx.documentfile:documentfile:1.0.1")
     // WebRTC dipakai langsung di AgentViewModel (ScreenCapturerAndroid).
     // Versi SAMA dengan modul :shared (implementation tidak diturunkan).
-    implementation("org.webrtc:google-webrtc:1.0.32006")
+    // CATATAN: org.webrtc:google-webrtc:1.0.32006 (M83, 2020) TIDAK ADA di
+    // Maven Central/Google Maven — ia hanya pernah ada di JCenter yang sudah
+    // mati. Penggantinya: fork LiveKit (io.github.webrtc-sdk:android, M125),
+    // drop-in dengan paket/API org.webrtc yang sama, terverifikasi ada di
+    // Maven Central (latest 125.6422.07).
+    implementation("io.github.webrtc-sdk:android:125.6422.07")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

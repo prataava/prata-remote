@@ -30,6 +30,8 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
-    // WebRTC resmi Google (M120) — PeerConnection, capturer layar, EGL.
-    implementation("org.webrtc:google-webrtc:1.0.32006")
+    // WebRTC (LiveKit fork, M125) — PeerConnection, capturer layar, EGL.
+    // Pengganti org.webrtc:google-webrtc:1.0.32006 yang hanya ada di JCenter
+    // (mati); API org.webrtc sama (drop-in). Lihat catatan di agent/build.gradle.kts.
+    implementation("io.github.webrtc-sdk:android:125.6422.07")
 }

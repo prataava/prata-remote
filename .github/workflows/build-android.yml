@@ -57,16 +57,20 @@ jobs:
       - name: Build Controller (debug)
         run: ./gradlew :controller:assembleDebug --stacktrace
 
+      # CATATAN: defaults.run.working-directory (apps/android) TIDAK berlaku
+      # untuk langkah `uses:` — upload-artifact berjalan dari root repo,
+      # jadi path APK harus menyertakan apps/android/ (run 43725195238:
+      # build lolos, upload gagal "No files were found").
       - name: Upload APK Agent
         uses: actions/upload-artifact@v4
         with:
           name: prata-remote-agent-debug
-          path: agent/build/outputs/apk/debug/agent-debug.apk
+          path: apps/android/agent/build/outputs/apk/debug/agent-debug.apk
           if-no-files-found: error
 
       - name: Upload APK Controller
         uses: actions/upload-artifact@v4
         with:
           name: prata-remote-controller-debug
-          path: controller/build/outputs/apk/debug/controller-debug.apk
+          path: apps/android/controller/build/outputs/apk/debug/controller-debug.apk
           if-no-files-found: error

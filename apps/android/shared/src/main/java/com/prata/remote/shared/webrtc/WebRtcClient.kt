@@ -102,21 +102,9 @@ class WebRtcClient(
         }
     }
 
-    init {
-        PeerConnectionFactory.initialize(
-            PeerConnectionFactory.InitializationOptions.builder(appContext).createInitializationOptions(),
-        )
-        factory = PeerConnectionFactory.builder()
-            .setVideoEncoderFactory(DefaultVideoEncoderFactory(eglBase.eglBaseContext, true, true))
-            .setVideoDecoderFactory(DefaultVideoDecoderFactory(eglBase.eglBaseContext))
-            .createPeerConnectionFactory()
-        val rtcConfig = PeerConnection.RTCConfiguration(iceServers.toWebRtc()).apply {
-            sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
-            continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
-        }
-        peerConnection = factory.createPeerConnection(rtcConfig, pcObserver)
-    }
-
+    // Dideklarasikan SEBELUM init: init memakai pcObserver, dan properti
+    // Kotlin diinisialisasi sesuai urutan teks (memakai yang dideklarasi
+    // sesudah init = error "must be initialized").
     private val pcObserver = object : PeerConnection.Observer {
         override fun onIceCandidate(candidate: org.webrtc.IceCandidate) {
             listener.onLocalIceCandidate(candidate.toDto())
@@ -138,6 +126,9 @@ class WebRtcClient(
         override fun onSignalingChange(state: PeerConnection.SignalingState) = Unit
         override fun onIceConnectionReceivingChange(receiving: Boolean) = Unit
         override fun onIceGatheringChange(state: PeerConnection.IceGatheringState) = Unit
+        // WAJIB di libwebrtc M125 (LiveKit fork): metode abstrak baru yang
+        // tidak ada di M83 — tanpa ini kelas anonim tidak lengkap.
+        override fun onIceCandidatesRemoved(candidates: Array<out org.webrtc.IceCandidate>) = Unit
         override fun onRemoveTrack(receiver: RtpReceiver) = Unit
         override fun onDataChannel(channel: DataChannel) {
             // Pihak penerima (Controller): channel dibuat oleh offerer (Agent).
@@ -148,6 +139,21 @@ class WebRtcClient(
         override fun onAddStream(stream: org.webrtc.MediaStream) = Unit
         override fun onRemoveStream(stream: org.webrtc.MediaStream) = Unit
         override fun onTrack(transceiver: RtpTransceiver) = Unit
+    }
+
+    init {
+        PeerConnectionFactory.initialize(
+            PeerConnectionFactory.InitializationOptions.builder(appContext).createInitializationOptions(),
+        )
+        factory = PeerConnectionFactory.builder()
+            .setVideoEncoderFactory(DefaultVideoEncoderFactory(eglBase.eglBaseContext, true, true))
+            .setVideoDecoderFactory(DefaultVideoDecoderFactory(eglBase.eglBaseContext))
+            .createPeerConnectionFactory()
+        val rtcConfig = PeerConnection.RTCConfiguration(iceServers.toWebRtc()).apply {
+            sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
+            continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
+        }
+        peerConnection = factory.createPeerConnection(rtcConfig, pcObserver)
     }
 
     private val dataChannelObserver = object : DataChannel.Observer {
